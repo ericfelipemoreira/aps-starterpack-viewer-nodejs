@@ -14,8 +14,24 @@ async function getAccessToken(callback) {
     }
 }
 
+function showNotification(message) {
+    const notification = document.createElement('div');
+    notification.className = 'loading-notification';
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    return notification;
+}
+
+function removeNotification(notification) {
+    if (notification && notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+    }
+}
+
 export function initViewer(container) {
     return new Promise(function (resolve, reject) {
+        const loadingNotification = showNotification('Initializing viewer...');
+        
         Autodesk.Viewing.Initializer({ env: 'AutodeskProduction', getAccessToken }, function () {
             const config = {
                 extensions: ['Autodesk.DocumentBrowser']
@@ -23,6 +39,7 @@ export function initViewer(container) {
             const viewer = new Autodesk.Viewing.GuiViewer3D(container, config);
             viewer.start();
             viewer.setTheme('light-theme');
+            removeNotification(loadingNotification);
             resolve(viewer);
         });
     });
@@ -30,12 +47,21 @@ export function initViewer(container) {
 
 export function loadModel(viewer, urn) {
     return new Promise(function (resolve, reject) {
+        const loadingNotification = showNotification('Please wait, do not interact');
+        
         function onDocumentLoadSuccess(doc) {
-            resolve(viewer.loadDocumentNode(doc, doc.getRoot().getDefaultGeometry()));
+            const viewerPromise = viewer.loadDocumentNode(doc, doc.getRoot().getDefaultGeometry());
+            viewerPromise.then(() => {
+                removeNotification(loadingNotification);
+            });
+            resolve(viewerPromise);
         }
+        
         function onDocumentLoadFailure(code, message, errors) {
+            removeNotification(loadingNotification);
             reject({ code, message, errors });
         }
+        
         viewer.setLightPreset(0);
         Autodesk.Viewing.Document.load('urn:' + urn, onDocumentLoadSuccess, onDocumentLoadFailure);
     });
